@@ -50,6 +50,9 @@ server {
     ssl_session_cache shared:MATRESHKA_TLS:10m;
     ssl_session_timeout 1d;
     client_max_body_size 1m;
+    # Bun corrupts streamed responses to HTTP/1.0 upstream requests by appending
+    # request framing bytes. Keep every application-edge proxy hop on HTTP/1.1.
+    proxy_http_version 1.1;
 
     add_header Strict-Transport-Security "max-age=15552000" always;
     add_header X-Content-Type-Options "nosniff" always;

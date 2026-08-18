@@ -25,6 +25,9 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:MATRESHKA_SETUP_TLS:2m;
     client_max_body_size 64k;
+    # Bun corrupts streamed responses to HTTP/1.0 upstream requests by appending
+    # request framing bytes. Keep every setup-edge proxy hop on HTTP/1.1.
+    proxy_http_version 1.1;
 
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "no-referrer" always;

@@ -54,6 +54,17 @@ describe("release trust chain", () => {
     expect(nginx).toContain("location / {\n        return 404;");
   });
 
+  test("proxies every edge response to Bun over HTTP/1.1", async () => {
+    for (const file of ["matreshka-setup.conf.template", "matreshka.conf.template"]) {
+      const nginx = await Bun.file(resolve(root, "infra/nginx", file)).text();
+      const tlsServer = nginx.indexOf("server {\n    listen 443");
+      const securityHeaders = nginx.indexOf("\n    add_header", tlsServer);
+      expect(tlsServer).toBeGreaterThan(0);
+      expect(securityHeaders).toBeGreaterThan(tlsServer);
+      expect(nginx.slice(tlsServer, securityHeaders)).toContain("proxy_http_version 1.1;");
+    }
+  });
+
   test("verifies detached signatures before update extraction", async () => {
     const updater = await Bun.file(resolve(root, "infra/scripts/apply-update")).text();
     const verify = updater.indexOf("minisign -Vm");
