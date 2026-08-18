@@ -15,6 +15,7 @@ import { JournalService, type JournalScope } from "./services/journal";
 import type { JournalCategory } from "./models";
 import { MonitoringService } from "./services/monitoring";
 import { DeviceSyncService } from "./services/device-sync";
+import { SetupService } from "./services/setup";
 
 type Owner = { id: string; name: string; timezone: string; scopes?: string[] };
 type Handler = (context: RequestContext) => Response | Promise<Response>;
@@ -41,6 +42,7 @@ export class HttpApplication {
   readonly journal: JournalService;
   readonly monitoring: MonitoringService;
   readonly deviceSync: DeviceSyncService;
+  readonly setup: SetupService;
   private registry: Route[] = [];
 
   constructor(
@@ -49,6 +51,7 @@ export class HttpApplication {
   ) {
     this.journal = new JournalService(db);
     this.auth = new AuthService(db, this.journal);
+    this.setup = new SetupService(this.auth);
     this.people = new PeopleService(db, this.journal);
     this.routes = new RouteService(db, this.journal);
     this.traffic = new TrafficService(db, configuredCollectors(), this.journal);
@@ -97,6 +100,8 @@ export class HttpApplication {
     this.get("/readyz", true, () => json({ ok: true, database: true }));
 
     this.get("/api/v1/auth/state", true, () => json(this.auth.state()));
+    this.get("/api/v1/setup", true, (ctx) => json(this.setup.state(ctx.url.searchParams.get("bootstrap") ?? undefined)));
+    this.post("/api/v1/setup/domain", true, async (ctx) => json(await this.setup.finalize(await ctx.json())));
     this.post("/api/v1/auth/register/options", true, async (ctx) => {
       const body = await ctx.json();
       return json(await this.auth.registrationOptions(body, ctx.owner?.id));

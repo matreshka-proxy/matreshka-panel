@@ -15,6 +15,7 @@ export const config = {
   version: process.env.MATRESHKA_VERSION ?? version,
   production,
   demo: process.env.MATRESHKA_DEMO === "1",
+  setup: process.env.MATRESHKA_SETUP === "1",
   dataDir,
   configDir,
   databasePath: join(dataDir, "matreshka.sqlite"),
@@ -23,6 +24,7 @@ export const config = {
   hostname: hostname || "127.0.0.1",
   port: Number(rawPort || "8181"),
   domain,
+  publicIp: process.env.MATRESHKA_PUBLIC_IP ?? (isIPv4(domain) ? domain : ""),
   adminPath,
   rpID: process.env.MATRESHKA_RP_ID ?? domain,
   origin: process.env.MATRESHKA_ORIGIN ?? (domain === "localhost" ? `http://localhost:${rawPort || "8181"}` : `https://${domain}`),
@@ -38,4 +40,9 @@ function normalizePath(value: string) {
   const trimmed = value.trim().replace(/\/{2,}/g, "/");
   const prefixed = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   return prefixed.length > 1 ? prefixed.replace(/\/$/, "") : prefixed;
+}
+
+function isIPv4(value: string) {
+  const parts = value.split(".");
+  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
 }

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository=matreshka-proxy/matreshka-panel
+release_public_key="RWQIi2TPWGnwEuL3XnEdwUYwcd194z3YYWM3sDdZNMhfEPf5xsFAk1FY"
+
+test "$(id -u)" -eq 0 || { echo "Run with sudo" >&2; exit 1; }
+test "$(dpkg --print-architecture)" = "amd64" || { echo "Ubuntu amd64 is required" >&2; exit 1; }
+# shellcheck source=/dev/null
+. /etc/os-release
+test "$ID" = "ubuntu" && test "$VERSION_ID" = "24.04" || { echo "Ubuntu 24.04 is required" >&2; exit 1; }
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates curl minisign
+
+requested=${MATRESHKA_VERSION:-}
+if test -n "$requested"; then
+  version=${requested#v}
+  [[ "$version" =~ ^[0-9][0-9A-Za-z.-]{0,39}$ ]] || { echo "Invalid MATRESHKA_VERSION" >&2; exit 1; }
+  tag="v$version"
+else
+  latest=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$repository/releases/latest")
+  tag=${latest##*/}
+  version=${tag#v}
+  [[ "$tag" = v* && "$version" =~ ^[0-9][0-9A-Za-z.-]{0,39}$ ]] || { echo "Could not resolve the latest Matreshka release" >&2; exit 1; }
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+archive="$work/matreshka-$version-linux-amd64.tar.gz"
+signature="$archive.minisig"
+base="https://github.com/$repository/releases/download/$tag"
+curl -fL --retry 3 -o "$archive" "$base/$(basename "$archive")"
+curl -fL --retry 3 -o "$signature" "$base/$(basename "$signature")"
+minisign -Vm "$archive" -x "$signature" -P "$release_public_key"
+
+tar -xzf "$archive" -C "$work"
+release_dir="$work/matreshka-$version"
+test -x "$release_dir/infra/scripts/install" || { echo "Release installer is missing" >&2; exit 1; }
+(cd "$release_dir" && sha256sum -c SHA256SUMS)
+"$release_dir/infra/scripts/install" "$archive" "$signature"

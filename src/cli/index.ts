@@ -59,15 +59,12 @@ async function doctor(args: string[]) {
 
 async function deploy(args: string[]) {
   const target = args.find((value) => !value.startsWith("-"));
-  const domain = option(args, "--domain");
-  const email = option(args, "--email") ?? `admin@${domain}`;
-  if (!target || !domain) throw new Error("Использование: matreshkactl deploy root@server --domain proxy.example.com");
+  if (!target) throw new Error("Использование: matreshkactl deploy root@server");
   if (!/^root@[^\s]+$/.test(target)) throw new Error("Первая установка выполняется от root: root@server");
-  if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(domain)) throw new Error("Укажите корректный домен");
   const root = repositoryRoot();
   const script = resolve(root, "infra/scripts/deploy-remote");
   accessSync(script, constants.X_OK);
-  await run([script, target, domain, email]);
+  await run([script, target]);
 }
 
 function repositoryRoot() {
@@ -137,7 +134,7 @@ function help() {
   console.log(`Matreshka CLI
 
 matreshkactl doctor --url https://proxy.example.com
-matreshkactl deploy root@server --domain proxy.example.com [--email admin@example.com]
+matreshkactl deploy root@server
 matreshkactl update root@server --bundle release.tar.gz [--signature release.tar.gz.minisig]
 matreshkactl backup export backup.age
 matreshkactl restore backup.age

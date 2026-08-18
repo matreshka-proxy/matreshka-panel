@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+set -a
+# shellcheck source=/dev/null
+. /etc/matreshka/matreshka.env
+set +a
+exec /opt/matreshka/current/bin/matreshkactl "$@"

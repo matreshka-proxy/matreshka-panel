@@ -2,9 +2,7 @@
 set -euo pipefail
 
 target=${1:-}
-domain=${2:-}
-email=${3:-"admin@${domain}"}
-test -n "$target" && test -n "$domain" || { echo "Usage: deploy-remote root@server domain [email]" >&2; exit 1; }
+test -n "$target" || { echo "Usage: deploy-remote root@server" >&2; exit 1; }
 
 repo_root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$repo_root"
@@ -22,7 +20,7 @@ test -f "$signature"
 remote_archive="/tmp/$(basename "$archive")"
 remote_signature="${remote_archive}.minisig"
 scp "$archive" "$signature" "$target:/tmp/"
-printf -v remote_command '%q ' bash -s -- "$remote_archive" "$remote_signature" "$domain" "$email"
+printf -v remote_command '%q ' bash -s -- "$remote_archive" "$remote_signature"
 # remote_command is fully escaped with bash printf %q above.
 # shellcheck disable=SC2029
 ssh "$target" "$remote_command" <infra/scripts/install

@@ -45,14 +45,14 @@ func TestConfigEngineAllowlist(t *testing.T) {
 
 func TestBackupPassphraseAndPath(t *testing.T) {
 	good := Request{Action: "backup.export", Payload: map[string]any{
-		"output": "/var/lib/matreshka/backups/operation.age",
+		"output":     "/var/lib/matreshka/backups/operation.age",
 		"passphrase": "correct horse battery staple",
 	}}
 	if err := Validate(good); err != nil {
 		t.Fatalf("valid backup rejected: %v", err)
 	}
 	bad := Request{Action: "backup.export", Payload: map[string]any{
-		"output": "/var/lib/matreshka/backups/operation.age",
+		"output":     "/var/lib/matreshka/backups/operation.age",
 		"passphrase": "short",
 	}}
 	if err := Validate(bad); err == nil {
@@ -101,6 +101,33 @@ func TestApplicationUpdateRequiresBundleAndSignatureInsideIncoming(t *testing.T)
 	}}
 	if err := Validate(outside); err == nil {
 		t.Fatal("signature outside incoming directory accepted")
+	}
+}
+
+func TestSetupFinalizeAcceptsOnlyStructuredDomainAndIPv4(t *testing.T) {
+	good := Request{Action: "setup.finalize", Payload: map[string]any{
+		"domain": "proxy.example.com", "publicIp": "203.0.113.42",
+	}}
+	if err := Validate(good); err != nil {
+		t.Fatalf("valid setup rejected: %v", err)
+	}
+	badDomain := Request{Action: "setup.finalize", Payload: map[string]any{
+		"domain": "proxy.example.com;id", "publicIp": "203.0.113.42",
+	}}
+	if err := Validate(badDomain); err == nil {
+		t.Fatal("unsafe domain accepted")
+	}
+	badAddress := Request{Action: "setup.finalize", Payload: map[string]any{
+		"domain": "proxy.example.com", "publicIp": "203.0.113.999",
+	}}
+	if err := Validate(badAddress); err == nil {
+		t.Fatal("invalid IPv4 accepted")
+	}
+	numericDomain := Request{Action: "setup.finalize", Payload: map[string]any{
+		"domain": "203.0.113.42", "publicIp": "203.0.113.42",
+	}}
+	if err := Validate(numericDomain); err == nil {
+		t.Fatal("IP address accepted as a permanent domain")
 	}
 }
 

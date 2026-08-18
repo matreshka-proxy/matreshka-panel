@@ -158,15 +158,36 @@ tag matreshka-setup
 	domain = ''
 	server = ''
 	preview = false
+	loading = true
 	busy = false
 	copied = false
 	help = false
+	message = null
+	onboarding = null
 
 	def setup
 		const params = new URLSearchParams(window.location.search)
 		const hostname = window.location.hostname
 		preview = params.get('bootstrap') == 'preview'
-		server = params.get('ip') or (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ? hostname : '203.0.113.42')
+		if preview
+			server = params.get('ip') or '203.0.113.42'
+		else
+			server = params.get('ip') or (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ? hostname : '203.0.113.42')
+		loading = !preview
+
+	def mount
+		load! unless preview
+
+	def load
+		try
+			const bootstrap = new URLSearchParams(window.location.search).get('bootstrap')
+			const state = await store.api('GET', "/api/v1/setup?bootstrap={window.encodeURIComponent(bootstrap or '')}")
+			server = state.publicIp
+		catch issue
+			message = issue.message
+		finally
+			loading = false
+			imba.commit!
 
 	get providers
 		[
@@ -224,13 +245,27 @@ tag matreshka-setup
 		return unless valid?
 		domain = address
 		busy = true
-		await new Promise do(resolve)
-			window.setTimeout(resolve, 900)
-		busy = false
-		move 2, 1
-		imba.commit!
+		message = null
+		try
+			if preview
+				await new Promise do(resolve) window.setTimeout(resolve, 900)
+			else
+				const bootstrap = new URLSearchParams(window.location.search).get('bootstrap')
+				const result = await store.api('POST', '/api/v1/setup/domain', {bootstrapToken: bootstrap, domain: domain})
+				domain = result.domain
+				onboarding = result.onboardingUrl
+				await new Promise do(resolve) window.setTimeout(resolve, 2200)
+			move 2, 1
+		catch issue
+			message = issue.message
+		finally
+			busy = false
+			imba.commit!
 
 	def open_owner
+		if onboarding
+			window.location.assign(onboarding)
+			return
 		const bootstrap = new URLSearchParams(window.location.search).get('bootstrap')
 		const query = bootstrap ? "?bootstrap={window.encodeURIComponent(bootstrap)}" : ''
 		store.goto("/onboarding{query}")
@@ -238,7 +273,16 @@ tag matreshka-setup
 	<self>
 		<matreshka-auth-shell mode="preflight">
 			<section.auth-panel.setup-panel .backwards=(direction < 0)>
-				if step == 0
+				if loading
+					<div.step.loading-step>
+						<matreshka-icon name="spinner-gap">
+				elif message and step == 0
+					<div.step.error-step>
+						<div.matreshka-error> message
+						<button.matreshka-button @click=load>
+							<matreshka-icon name="arrows-clockwise">
+							<span> 'Повторить'
+				elif step == 0
 					<form.step.choice-step [o@off:0 ease:340ms] ease @submit.prevent=advance>
 						<span.panel-badge> t('setup.badge')
 						<h1> t('setup.domain.title')
@@ -333,6 +377,8 @@ tag matreshka-setup
 						<div.waiting>
 							<matreshka-icon name="clock">
 							<span> t('setup.dns.waiting')
+						if message
+							<div.matreshka-error> message
 						<button.matreshka-button type="submit" disabled=blocked?>
 							<matreshka-icon name=(busy ? 'spinner-gap' : 'arrows-clockwise')>
 							<span> busy ? t('setup.dns.checking') : t('setup.dns.check')
@@ -364,6 +410,9 @@ tag matreshka-setup
 	css self
 		.auth-panel pos:relative w:min(620px, 100%) mih:620px
 		.step w:100% mih:620px d:flex fld:column jc:center tween:opacity 240ms ease-out, transform 340ms cubic-bezier(.22,1,.36,1)
+		.loading-step ja:center c:var(--matreshka-brand) fs:28px
+		.loading-step matreshka-icon animation:spin 1s linear infinite
+		.error-step .matreshka-button mt:20px
 		.step@enter o:0; transform:translateX(36px)
 		.step@leave pos:absolute t:0 l:0 o:0; transform:translateX(-36px)
 		.auth-panel.backwards .step@enter transform:translateX(-36px)

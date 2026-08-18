@@ -97,6 +97,13 @@ func execute(request policy.Request) (string, error) {
 			return output, err
 		}
 		return run("systemctl", "reload", "nginx")
+	case "setup.finalize":
+		return run(
+			"systemd-run", "--wait", "--collect", "--pipe", "--quiet",
+			"/opt/matreshka/current/infra/scripts/finalize-domain",
+			request.Payload["domain"].(string),
+			request.Payload["publicIp"].(string),
+		)
 	case "engine.update":
 		return run(
 			"/opt/matreshka/current/infra/scripts/update-engine",

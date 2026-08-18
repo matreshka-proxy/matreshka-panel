@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 var allowedServices = map[string]bool{
-	"matreshka":      true,
+	"matreshka":       true,
 	"nginx":           true,
 	"hysteria-server": true,
 	"xray":            true,
@@ -42,6 +44,16 @@ func Validate(request Request) error {
 			return errors.New("engine service is not allowed")
 		}
 	case "nginx.reload":
+		return nil
+	case "setup.finalize":
+		domain, ok := request.Payload["domain"].(string)
+		if !ok || !validDomain(domain) {
+			return errors.New("valid domain is required")
+		}
+		address, ok := request.Payload["publicIp"].(string)
+		if !ok || !validIPv4(address) {
+			return errors.New("valid public IPv4 is required")
+		}
 		return nil
 	case "engine.update":
 		engine, ok := request.Payload["engine"].(string)
@@ -120,6 +132,57 @@ func validSHA256(value string) bool {
 	}
 	for _, char := range value {
 		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validDomain(value string) bool {
+	if len(value) < 4 || len(value) > 253 || value[0] == '.' || value[len(value)-1] == '.' || validIPv4(value) {
+		return false
+	}
+	dots := 0
+	labelLength := 0
+	for index, char := range value {
+		if char == '.' {
+			if labelLength == 0 || value[index-1] == '-' {
+				return false
+			}
+			dots++
+			labelLength = 0
+			continue
+		}
+		if labelLength == 0 && char == '-' {
+			return false
+		}
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return false
+		}
+		labelLength++
+		if labelLength > 63 {
+			return false
+		}
+	}
+	suffix := value[strings.LastIndex(value, ".")+1:]
+	hasLetter := false
+	for _, char := range suffix {
+		hasLetter = hasLetter || (char >= 'a' && char <= 'z')
+	}
+	return dots > 0 && labelLength > 0 && value[len(value)-1] != '-' && hasLetter
+}
+
+func validIPv4(value string) bool {
+	parts := strings.Split(value, ".")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 3 {
+			return false
+		}
+		number, err := strconv.Atoi(part)
+		if err != nil || number < 0 || number > 255 {
 			return false
 		}
 	}

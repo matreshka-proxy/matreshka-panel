@@ -36,6 +36,8 @@ jobs:
           version="${RELEASE_TAG#v}"
           test "$RELEASE_TAG" = "v$version"
           test "$version" = "$(bun -e 'console.log(require("./package.json").version)')"
+          git fetch origin main --no-tags --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
           bun install --frozen-lockfile
       - name: Test application and agent
         run: |
@@ -87,7 +89,12 @@ jobs:
       - name: Publish immutable GitHub Release
         run: |
           archive="$(find release -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          prerelease=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            prerelease+=(--prerelease)
+          fi
           gh release create "$RELEASE_TAG" "$archive" "${archive}.minisig" "${archive}.sha256" \
             --verify-tag \
             --title "Matreshka ${RELEASE_TAG#v}" \
+            "${prerelease[@]}" \
             --generate-notes

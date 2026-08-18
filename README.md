@@ -2,7 +2,7 @@
 
 Self-hosted-панель для одного владельца, его близких и устройств. Matreshka разворачивает и поддерживает Hysteria 2 и VLESS + XHTTP на одном домене, выдаёт подписки для INCY и Everywhere/Mihomo, публикует общие правила маршрутизации и считает трафик по людям и устройствам без истории посещённых доменов.
 
-> Статус: `0.1.0`, pre-release. Локальные тесты, production-сборки и подписанный RC проходят; первая полевая установка ещё должна пройти VM/VPS gate из [STATUS.md](STATUS.md).
+> Статус: `0.1.0-rc.1`, pre-release. Локальные тесты и production-сборки проходят; первая полевая установка ещё должна пройти VPS gate из [STATUS.md](STATUS.md).
 
 ## Архитектура
 
@@ -47,21 +47,25 @@ bun run dev
 
 Панель с демонстрационными данными откроется на `http://localhost:8181/admin/`, а интерактивный pre-launch preview — на `http://localhost:8181/admin/setup?bootstrap=preview`.
 
-## Сборка и первый запуск
+## Установка на сервер
 
-Целевой путь v1 не требует локального приложения и покупки домена: одна команда запускается в web-консоли VPS, после чего бесплатный hostname или собственный домен, DNS, HTTPS и владелец настраиваются в браузере. Passkey создаётся только после перехода на постоянный HTTPS-адрес.
-
-Текущий developer deploy остаётся до реализации публичного server-side installer:
+Нужна чистая Ubuntu 24.04 amd64 с публичным IPv4 и свободными портами TCP 80/443 и UDP 443. В web-консоли VPS выполните одну команду:
 
 ```bash
-bun run build
-MATRESHKA_AGENT_BINARY=dist/matreshka-agent \
-MATRESHKA_MINISIGN_SECRET_KEY="$HOME/.config/matreshka/release.key" \
-MATRESHKA_REQUIRE_SIGNATURE=1 bun run release:linux
-./dist/matreshkactl-darwin-arm64 deploy root@SERVER --domain proxy.example.com
+curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo bash /tmp/matreshka-install
 ```
 
-Этот developer deploy пока требует заранее направить A-запись на VPS. Целевой first-run flow описан в [документации по развёртыванию](docs/DEPLOYMENT.md).
+Installer скачивает последний GitHub Release, проверяет detached Minisign signature, ставит только необходимые пакеты и получает короткоживущий доверенный сертификат Let's Encrypt для IP. Полное обновление Ubuntu и перезагрузка не выполняются. В конце команда печатает одноразовую HTTPS-ссылку.
+
+Дальше в браузере можно выбрать бесплатный hostname или собственный домен. Matreshka показывает нужную A-запись, ждёт DNS, выпускает обычный сертификат домена и только после перехода на конечный адрес предлагает создать владельца и passkey.
+
+Для установки конкретного RC вместо последнего стабильного release:
+
+```bash
+sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
+```
+
+Подробности, developer deploy и восстановление описаны в [документации по развёртыванию](docs/DEPLOYMENT.md).
 
 ## Лицензия
 

@@ -327,7 +327,7 @@ export async function callAgent(request: { action: string; payload: Record<strin
   return new Promise<Record<string, unknown>>((resolve, reject) => {
     const socket = createConnection(config.agentSocket);
     let response = "";
-    const timeout = request.action === "engine.update" ? 120_000 : 30_000;
+    const timeout = request.action === "setup.finalize" ? 180_000 : request.action === "engine.update" ? 120_000 : 30_000;
     socket.setTimeout(timeout);
     socket.on("connect", () => socket.end(`${JSON.stringify(request)}\n`));
     socket.on("data", (chunk) => { response += chunk.toString("utf8"); });

@@ -8,7 +8,7 @@
 - доступ к web-консоли VPS или SSH для одной стартовой команды;
 - бесплатный hostname в поддерживаемом DNS-сервисе либо собственный домен, DNS которого можно изменить.
 
-## Целевая первая установка v1
+## Первая установка
 
 1. Владелец вставляет одну команду в web-консоль хостера. Локальный `matreshkactl` не требуется.
 2. Installer проверяет Ubuntu и порты, верифицирует подписанный release, ставит control plane и получает короткоживущий Let's Encrypt certificate для public IP.
@@ -19,17 +19,39 @@
 
 Временный IP certificate не используется как WebAuthn RP ID и не попадает в клиентские профили. Он защищает только pre-launch сессию. Внешний DNS-сервис выдаёт только hostname: certificate выпускает сама Matreshka, а credentials или tokens этого сервиса панель в v1 не хранит.
 
-## Текущий developer deploy
+Запустите в web-консоли VPS:
 
-Пока server-side installer не реализован, разработчик заранее направляет A-запись на VPS и запускает deploy из monorepo:
+```bash
+curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo bash /tmp/matreshka-install
+```
+
+Для field test конкретного pre-release:
+
+```bash
+sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
+```
+
+Bootstrap устанавливает `curl`, CA certificates и Minisign, определяет release, скачивает archive и signature с GitHub и проверяет встроенным public key до запуска release installer. Release installer повторно проверяет подпись, затем ставит Nginx, UFW, SQLite/age, pinned tunnel engines и актуальный Certbot из официального snap. Ubuntu 24.04 содержит Certbot 2.9, а IP certificates требуют Certbot 5.4+; поэтому apt-версия Certbot не используется.
+
+`apt-get update` обновляет только индекс пакетов, а `apt-get install` добавляет зависимости Matreshka. Installer не выполняет `full-upgrade`, не меняет kernel и не перезагружает VPS.
+
+Если одноразовая ссылка истекла, получите новую server-local командой:
+
+```bash
+sudo matreshkactl bootstrap-reset
+```
+
+## Developer deploy
+
+Для отладки release pipeline разработчик может собрать подписанный archive локально и передать его на чистый VPS по SSH:
 
 ```bash
 bun install --frozen-lockfile
 bun run build:cli:mac
-./dist/matreshkactl-darwin-arm64 deploy root@203.0.113.10 --domain proxy.example.com
+./dist/matreshkactl-darwin-arm64 deploy root@203.0.113.10
 ```
 
-Developer deploy по-прежнему требует локальные Bun, Go, SSH и SCP. Это временное ограничение текущей реализации, а не контракт продукта.
+Developer deploy требует локальные Bun, Go, SSH, SCP и release signing key. Он запускает тот же IP-first installer и не является пользовательским installation surface.
 
 Developer deploy также требует локальный Minisign key вне репозитория. Канонический public key находится в `infra/release/minisign.pub`; private key хранится отдельно и загружен как environment secret `release/MINISIGN_SECRET_KEY` в GitHub.
 
@@ -57,7 +79,7 @@ MATRESHKA_REQUIRE_SIGNATURE=1 bun run release:linux
 
 Updater сначала проверяет detached Minisign signature ключом из уже доверенной установленной версии и только затем распаковывает archive и сверяет внутренний `SHA256SUMS`, включая `manifest.json`. Он оставляет минимум две предыдущие версии. После неуспешного readiness автоматически восстанавливаются code symlink и предмиграционный SQLite snapshot.
 
-GitHub workflow `Signed release` запускается только вручную из ветки `main` для уже существующего `v*` tag и делает checkout по точному `refs/tags/<tag>`. Build/test выполняются без ключа; отдельный job в environment `release`, ограниченном веткой `main`, получает private key, подписывает archive, повторно проверяет подпись и публикует immutable GitHub Release. Текущий тариф приватного репозитория не поддерживает required reviewer для environment, поэтому ручной `workflow_dispatch` является обязательным approval gate.
+GitHub workflow `Signed release` запускается только вручную из ветки `main` для уже существующего `v*` tag и делает checkout по точному `refs/tags/<tag>`. Tag обязан точно совпадать с версией в `package.json`. Build/test выполняются без ключа; отдельный job в environment `release`, ограниченном веткой `main`, получает private key, подписывает archive, повторно проверяет подпись и публикует immutable GitHub Release. Версии с дефисом, например `v0.1.0-rc.1`, помечаются как pre-release и не выбираются bootstrap-командой без явного `MATRESHKA_VERSION`.
 
 ## Backup и restore
 

@@ -18,6 +18,6 @@ Matreshka распространяется по AGPL-3.0-only. Следующи�
 | Hysteria 2 | 2.12.1 | MIT |
 | Xray-core | 26.3.27 | MPL-2.0 |
 | Nginx | Ubuntu 24.04 package | BSD-2-Clause |
-| Certbot | Ubuntu 24.04 package | Apache-2.0 |
+| Certbot | official snap, 5.4+ | Apache-2.0 |
 
 Production bundles include binaries and assets according to their upstream licenses. Full transitive dependency texts are available in the source packages and must accompany any redistributed bundle where required.

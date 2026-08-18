@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+domain=${1:-}
+public_ip=${2:-}
+env_file=/etc/matreshka/matreshka.env
+certbot=/snap/bin/certbot
+
+test "$(id -u)" -eq 0 || { echo "Run as root" >&2; exit 1; }
+[[ "$domain" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]] || { echo "Invalid domain" >&2; exit 1; }
+[[ "${domain##*.}" =~ [a-z] ]] || { echo "Domain suffix must contain a letter" >&2; exit 1; }
+[[ "$public_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo "Invalid public IPv4" >&2; exit 1; }
+test "$domain" != "$public_ip" || { echo "A permanent domain is required" >&2; exit 1; }
+test -x "$certbot" || { echo "Modern Certbot is not installed" >&2; exit 1; }
+test -f "$env_file" || { echo "Matreshka environment is missing" >&2; exit 1; }
+
+installed_ip=$(sed -n 's/^MATRESHKA_PUBLIC_IP=//p' "$env_file")
+setup_mode=$(sed -n 's/^MATRESHKA_SETUP=//p' "$env_file")
+test "$installed_ip" = "$public_ip" || { echo "Public IPv4 does not match the installed server" >&2; exit 1; }
+test "$setup_mode" = "1" || { echo "Initial setup is already complete" >&2; exit 1; }
+getent ahostsv4 "$domain" | awk '{print $1}' | sort -u | grep -Fx "$public_ip" >/dev/null || {
+  echo "DNS $domain does not point to $public_ip" >&2
+  exit 1
+}
+
+"$certbot" certonly \
+  --non-interactive \
+  --agree-tos \
+  --register-unsafely-without-email \
+  --webroot \
+  --webroot-path /var/lib/matreshka/acme \
+  --cert-name "$domain" \
+  -d "$domain"
+
+xhttp_path=$(sed -n 's/^MATRESHKA_XHTTP_PATH=//p' "$env_file")
+stats_secret=$(sed -n 's/^MATRESHKA_HYSTERIA_STATS_SECRET=//p' "$env_file")
+version=$(sed -n 's/^MATRESHKA_VERSION=//p' "$env_file")
+admin_path=$(sed -n 's/^MATRESHKA_ADMIN_PATH=//p' "$env_file")
+test -n "$xhttp_path" && test -n "$stats_secret" && test -n "$version" && test -n "$admin_path"
+
+stage=$(mktemp -d)
+armed=0
+rollback() {
+  systemctl disable --now xray hysteria-server >/dev/null 2>&1 || true
+  install -m 0644 "$stage/nginx.previous" /etc/nginx/sites-available/matreshka
+  install -o root -g matreshka -m 0640 "$stage/env.previous" "$env_file"
+  install -o root -g matreshka -m 0640 "$stage/hysteria.previous" /etc/matreshka/engines/hysteria.yaml
+  install -o root -g matreshka -m 0640 "$stage/xray.previous" /etc/matreshka/engines/xray.json
+  nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
+}
+finish() {
+  status=$?
+  set +e
+  test "$armed" -eq 0 || rollback
+  rm -rf "$stage"
+  exit "$status"
+}
+trap finish EXIT
+
+cp /etc/nginx/sites-available/matreshka "$stage/nginx.previous"
+cp "$env_file" "$stage/env.previous"
+cp /etc/matreshka/engines/hysteria.yaml "$stage/hysteria.previous"
+cp /etc/matreshka/engines/xray.json "$stage/xray.previous"
+armed=1
+
+sed -e "s|__DOMAIN__|$domain|g" -e "s|__XHTTP_PATH__|$xhttp_path|g" \
+  /opt/matreshka/current/infra/nginx/matreshka.conf.template >"$stage/nginx"
+sed -e "s|__DOMAIN__|$domain|g" -e "s|__STATS_SECRET__|$stats_secret|g" \
+  /opt/matreshka/current/infra/config/hysteria.yaml.template >"$stage/hysteria.yaml"
+sed -e "s|__XHTTP_PATH__|$xhttp_path|g" \
+  /opt/matreshka/current/infra/config/xray.json.template >"$stage/xray.json"
+
+cat >"$stage/matreshka.env" <<ENV
+NODE_ENV=production
+MATRESHKA_VERSION=$version
+MATRESHKA_SETUP=0
+MATRESHKA_PUBLIC_IP=$public_ip
+MATRESHKA_DOMAIN=$domain
+MATRESHKA_RP_ID=$domain
+MATRESHKA_ORIGIN=https://$domain
+MATRESHKA_ADMIN_PATH=$admin_path
+MATRESHKA_XHTTP_PATH=$xhttp_path
+MATRESHKA_LISTEN=127.0.0.1:8181
+MATRESHKA_DATA_DIR=/var/lib/matreshka
+MATRESHKA_CONFIG_DIR=/etc/matreshka
+MATRESHKA_WEB_ROOT=/opt/matreshka/current/public
+MATRESHKA_HYSTERIA_STATS_URL=http://127.0.0.1:9999
+MATRESHKA_HYSTERIA_STATS_SECRET=$stats_secret
+MATRESHKA_XRAY_BINARY=/opt/matreshka/engines/xray/current/xray
+MATRESHKA_XRAY_API=127.0.0.1:10085
+ENV
+
+install -m 0644 "$stage/nginx" /etc/nginx/sites-available/matreshka
+install -o root -g matreshka -m 0640 "$stage/matreshka.env" "$env_file"
+install -o root -g matreshka -m 0640 "$stage/hysteria.yaml" /etc/matreshka/engines/hysteria.yaml
+install -o root -g matreshka -m 0640 "$stage/xray.json" /etc/matreshka/engines/xray.json
+
+nginx -t
+systemctl reload nginx
+systemctl enable --now xray hysteria-server
+armed=0
+
+"$certbot" delete --non-interactive --cert-name "$public_ip" >/dev/null 2>&1 || true
+systemd-run --on-active=2s --collect --quiet /bin/systemctl restart matreshka
+echo "https://$domain$admin_path/onboarding"

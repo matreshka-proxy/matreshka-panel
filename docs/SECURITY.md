@@ -14,6 +14,8 @@
 - raw bootstrap token не сохраняется в WebAuthn challenge, просроченные challenge удаляются, число незавершённых challenge ограничено;
 - активация и отзыв устройства завершаются в SQLite только после успешной синхронизации движка; незавершённые операции сохраняются в outbox и повторяются после рестарта;
 - release archive имеет detached Minisign signature, проверяемую installer/updater до распаковки;
+- временный IP edge разрешает только setup API, setup SPA и статические ресурсы; WebAuthn и обычная панель до final domain снаружи недоступны;
+- setup token проверяется до DNS lookup и root-action, а DNS повторно сверяется с установленным public IPv4 внутри привилегированного finalize-скрипта;
 - все мутации создают audit entries; passphrases и raw secrets туда не передаются;
 - история посещённых доменов не собирается.
 
@@ -23,8 +25,10 @@ Matreshka защищает от случайной утечки URL в журн�
 
 Matreshka не защищает от полного root-компромисса VPS, вредоносного владельца, компрометации DNS/регистратора или устройства с активной подпиской. Root на сервере может прочитать master key и расшифровать credentials.
 
-## Публикация
+## Публичный репозиторий
 
-До открытия репозитория нужны независимый security review, field gate из `STATUS.md`, secret scan всей истории Git и проверка third-party licenses. Release signing key создан вне репозитория; public key закоммичен, private key хранится локально с mode `0600` и в GitHub environment secret. `servers.rtf`, SSH keys, реальные profiles, домены установки и API tokens в monorepo не переносятся.
+Исходники публикуются до field gate, чтобы установка могла скачивать подписанные GitHub Releases без GitHub-авторизации. Публичность исходников не означает production-ready: состояние релиза и непроверенные полевые сценарии перечислены в `STATUS.md`.
+
+Release signing key создан вне репозитория; public key закоммичен, private key хранится локально с mode `0600` и в GitHub environment secret. Перед сменой visibility проверяются рабочее дерево и вся Git-история. `servers.rtf`, SSH keys, реальные profiles, домены установки и API tokens в monorepo не переносятся.
 
 Уязвимости до публичного релиза следует сообщать владельцу приватно, не создавая публичный issue с operational details.

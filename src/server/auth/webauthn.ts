@@ -51,7 +51,7 @@ export class AuthService {
     const token = createToken();
     this.bootstrapToken = token;
     this.db.setSetting("bootstrap", { hash: hashToken(token), expiresAt: addHours(1) });
-    return `${config.origin}${config.adminPath}/onboarding?bootstrap=${token}`;
+    return this.bootstrapUrl(token);
   }
 
   resetBootstrap() {
@@ -64,7 +64,7 @@ export class AuthService {
     this.db.setSetting("bootstrap", { hash: hashToken(token), expiresAt: addHours(1) });
     const auditId = this.db.audit({ actor: "root-cli", action: "auth.bootstrap.reset", resource: "owner", resourceId: owner?.id });
     this.journal.record("bootstrap.reset", { actor: "root-cli", auditId, subjectType: "owner", subjectId: owner?.id });
-    return `${config.origin}${config.adminPath}/onboarding?bootstrap=${token}`;
+    return this.bootstrapUrl(token);
   }
 
   state() {
@@ -92,6 +92,7 @@ export class AuthService {
   }
 
   async registrationOptions(input: unknown, authenticatedOwnerId?: string) {
+    if (config.setup) throw new ServiceError(409, "Сначала подключите постоянный домен");
     const context = registrationContext.parse(input);
     const owner = this.owner();
     if (owner && authenticatedOwnerId !== owner.id) throw new ServiceError(401, "Нужна действующая сессия владельца");
@@ -348,6 +349,10 @@ export class AuthService {
     this.journal.record("token.revoked", { actor, auditId, subjectType: "api_token", subjectId: id, data: { name: token?.name ?? "API" } });
   }
 
+  verifyBootstrapToken(token?: string) {
+    return this.verifyBootstrap(token);
+  }
+
   private createSession(ownerId: string, userAgent?: string) {
     const token = createToken();
     const session = { id: crypto.randomUUID(), token, expiresAt: addHours(config.sessionHours) };
@@ -378,6 +383,11 @@ export class AuthService {
       throw new ServiceError(401, "Bootstrap-ссылка недействительна или истекла");
     }
     return bootstrap;
+  }
+
+  private bootstrapUrl(token: string) {
+    const page = config.setup ? "setup" : "onboarding";
+    return `${config.origin}${config.adminPath}/${page}?bootstrap=${token}`;
   }
 
   private verifyBootstrapHash(hash?: string) {
