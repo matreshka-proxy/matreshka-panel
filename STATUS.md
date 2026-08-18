@@ -38,10 +38,10 @@
 - release manifest входит в `SHA256SUMS`, installer/updater проверяют detached signature до распаковки;
 - dependency override перевёл Imba toolchain на `esbuild 0.25.0`, `bun audit` чист.
 
-## Проверено локально
+## Проверено локально и на VPS
 
 - TypeScript typecheck и Imba production build;
-- 74 unit/integration tests, включая setup/DNS/root-agent contract, ACL status/dashboard, WebAuthn storage, persistent device outbox, release trust chain, journal API, redaction, Hysteria/Xray presence и monitoring;
+- 76 unit/integration tests, включая setup/DNS/root-agent contract, ACME webroot/rollback, ACL status/dashboard, WebAuthn storage, persistent device outbox, release trust chain, journal API, redaction, Hysteria/Xray presence и monitoring;
 - Go policy tests и статический linux/amd64 agent build;
 - standalone Linux server/CLI и macOS CLI builds;
 - desktop/mobile browser QA основных страниц и модальных сценариев;
@@ -51,24 +51,25 @@
 - Minisign private key находится вне репозитория с mode `0600` и загружен в GitHub environment `release`; public key закоммичен.
 - Gitleaks 8.30.1 просканировал исходное дерево: реальных секретов не найдено; pinned public Xray SHA-256 документирован в точечном allowlist.
 - GitHub-репозиторий публичен, `main` защищена обязательными CI-проверками и squash PR; включены secret scanning, push protection и Dependabot security updates;
-- signed workflow успешно опубликовал pre-release [`v0.1.0-rc.1`](https://github.com/matreshka-proxy/matreshka-panel/releases/tag/v0.1.0-rc.1);
-- публичный archive повторно скачан анонимно: внешний SHA-256 `30950dc3f5e07ff9288a250f19fb2d8703985f52620170895814cae47e716846`, detached Minisign signature и внутренний `SHA256SUMS` подтверждены;
+- signed workflow успешно опубликовал pre-release [`v0.1.0-rc.2`](https://github.com/matreshka-proxy/matreshka-panel/releases/tag/v0.1.0-rc.2); archive SHA-256 `a6c84eb9fba0d1653f26ca03d08179760751b0d91c023d6766346c836f3ed8e0`;
+- публичная one-line установка `v0.1.0-rc.2` прошла на Ubuntu 24.04 amd64: detached Minisign signature и внутренний `SHA256SUMS` подтверждены на сервере;
+- Let's Encrypt выдал trusted short-lived certificate с IP SAN `57.131.140.147`; внешние `/healthz`, `/readyz` и setup page доступны по HTTPS без отключения TLS verification;
+- Nginx, Matreshka и root-agent active/enabled, UFW active; Xray и Hysteria остаются disabled до browser-перехода на конечный домен;
 - Gitleaks повторно проверил текущее дерево и всю Git-историю перед публикацией: секретов и legacy-названия нет; `bun audit` не нашёл уязвимостей.
 
-## Gate перед первой реальной установкой
+## Оставшийся полевой gate
 
-Это сознательно не отмечено готовым без VPS/VM evidence:
+Первая установка и временный IP edge проверены. До production-ready остаются:
 
-1. полевой прогон готового server-side installer из web-консоли на чистой Ubuntu 24.04 amd64;
-2. фактическая выдача временного trusted IP certificate, одноразовый pre-launch URL, DNS polling и переход на domain certificate;
-3. реальные INCY/Everywhere imports на iPhone и Mac;
-4. Hysteria UDP/443 и Xray XHTTP TCP/443 через внешнюю сеть;
-5. корректность HandlerService команд на pinned Xray 26.3.27;
-6. traffic counters обоих движков в течение минимум суток;
-7. Hysteria connect/disconnect, Xray activity window, сон/пробуждение телефона и offline/returned после 24 часов;
-8. остановка/восстановление движка и проверка единственного incident/recovery в журнале;
-9. намеренно сломанный update и автоматический rollback;
-10. age export/restore на второй чистой VM с тем же доменом;
-11. WebAuthn e2e с virtual authenticator на final domain;
+1. browser DNS polling и атомарный переход с IP edge на domain certificate;
+2. реальные INCY/Everywhere imports на iPhone и Mac;
+3. Hysteria UDP/443 и Xray XHTTP TCP/443 через внешнюю сеть;
+4. корректность HandlerService команд на pinned Xray 26.3.27;
+5. traffic counters обоих движков в течение минимум суток;
+6. Hysteria connect/disconnect, Xray activity window, сон/пробуждение телефона и offline/returned после 24 часов;
+7. остановка/восстановление движка и проверка единственного incident/recovery в журнале;
+8. намеренно сломанный update и автоматический rollback;
+9. age export/restore на второй чистой VM с тем же доменом;
+10. WebAuthn e2e с virtual authenticator на final domain;
 
 До прохождения gate проект следует считать pre-release, а не production-ready.
