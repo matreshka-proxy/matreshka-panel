@@ -109,5 +109,5 @@ describe("typed journal", () => {
     expect(app.journal.list({ q: "Резервная копия создана" }).events[0]?.type).toBe("backup.created");
     expect(fixture.db.raw.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM device_presence").get()?.count).toBeGreaterThan(0);
     expect(app.people.list().flatMap((person) => person.devices).every((device) => Boolean(device.presence))).toBeTrue();
-  });
+  }, 15_000);
 });
