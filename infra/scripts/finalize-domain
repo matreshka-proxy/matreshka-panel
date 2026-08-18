@@ -28,7 +28,7 @@ getent ahostsv4 "$domain" | awk '{print $1}' | sort -u | grep -Fx "$public_ip" >
   --agree-tos \
   --register-unsafely-without-email \
   --webroot \
-  --webroot-path /var/lib/matreshka/acme \
+  --webroot-path /var/www/matreshka-acme \
   --cert-name "$domain" \
   -d "$domain"
 

@@ -2,7 +2,7 @@
 
 Self-hosted-панель для одного владельца, его близких и устройств. Matreshka разворачивает и поддерживает Hysteria 2 и VLESS + XHTTP на одном домене, выдаёт подписки для INCY и Everywhere/Mihomo, публикует общие правила маршрутизации и считает трафик по людям и устройствам без истории посещённых доменов.
 
-> Статус: `0.1.0-rc.1`, pre-release. Локальные тесты и production-сборки проходят; первая полевая установка ещё должна пройти VPS gate из [STATUS.md](STATUS.md).
+> Статус: `0.1.0-rc.2`, pre-release. Локальные тесты и production-сборки проходят; первая полевая установка проходит VPS gate из [STATUS.md](STATUS.md).
 
 ## Архитектура
 
@@ -62,7 +62,7 @@ Installer скачивает последний GitHub Release, проверяе
 Для установки конкретного RC вместо последнего стабильного release:
 
 ```bash
-curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
+curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo env MATRESHKA_VERSION=0.1.0-rc.2 bash /tmp/matreshka-install
 ```
 
 Подробности, developer deploy и восстановление описаны в [документации по развёртыванию](docs/DEPLOYMENT.md).

@@ -22,6 +22,31 @@ describe("release trust chain", () => {
     expect(installer).toContain("--preferred-profile shortlived");
   });
 
+  test("serves ACME challenges from an nginx-readable webroot before certificate issuance", async () => {
+    const installer = await Bun.file(resolve(root, "infra/scripts/install")).text();
+    const nginxFiles = [
+      "matreshka-setup-http.conf.template",
+      "matreshka-setup.conf.template",
+      "matreshka.conf.template",
+    ];
+    expect(installer).toContain("acme_webroot=/var/www/matreshka-acme");
+    expect(installer).not.toContain("/var/lib/matreshka/acme");
+    expect(installer.indexOf("matreshka-acme-ok")).toBeLessThan(installer.indexOf('"$certbot" certonly'));
+    for (const file of nginxFiles) {
+      const nginx = await Bun.file(resolve(root, "infra/nginx", file)).text();
+      expect(nginx).toContain("root /var/www/matreshka-acme;");
+      expect(nginx).not.toContain("/var/lib/matreshka/acme");
+    }
+  });
+
+  test("rolls back a failed first installation so the public command can be retried", async () => {
+    const installer = await Bun.file(resolve(root, "infra/scripts/install")).text();
+    expect(installer).toContain("rollback_install()");
+    expect(installer).toContain("systemctl stop nginx");
+    expect(installer).toContain("rm -rf /opt/matreshka /etc/matreshka /var/lib/matreshka");
+    expect(installer).toContain("rollback_armed=0");
+  });
+
   test("keeps WebAuthn unreachable on the temporary IP edge", async () => {
     const nginx = await Bun.file(resolve(root, "infra/nginx/matreshka-setup.conf.template")).text();
     expect(nginx).toContain("location ^~ /api/v1/setup");

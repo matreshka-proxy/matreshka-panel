@@ -20,7 +20,7 @@ server {
     server_name __DOMAIN__;
 
     location /.well-known/acme-challenge/ {
-        root /var/lib/matreshka/acme;
+        root /var/www/matreshka-acme;
     }
 
     location / {

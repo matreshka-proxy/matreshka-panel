@@ -5,6 +5,48 @@ release_archive=${1:-}
 release_signature=${2:-"${release_archive}.minisig"}
 release_public_key="RWQIi2TPWGnwEuL3XnEdwUYwcd194z3YYWM3sDdZNMhfEPf5xsFAk1FY"
 certbot=/snap/bin/certbot
+acme_webroot=/var/www/matreshka-acme
+release_tmp=
+version=
+public_ip=
+rollback_armed=0
+ufw_was_active=0
+
+rollback_install() {
+  echo "Installation failed; rolling back Matreshka files and services" >&2
+  systemctl disable --now matreshka matreshka-agent xray hysteria-server >/dev/null 2>&1 || true
+  if test -n "$public_ip" && test -x "$certbot"; then
+    "$certbot" delete --non-interactive --cert-name "$public_ip" >/dev/null 2>&1 || true
+  fi
+  systemctl stop nginx >/dev/null 2>&1 || true
+  rm -f /etc/nginx/sites-enabled/matreshka /etc/nginx/sites-available/matreshka
+  if test -f /etc/nginx/sites-available/default; then
+    ln -sfn /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+  fi
+  rm -f /etc/letsencrypt/renewal-hooks/deploy/matreshka /usr/local/bin/matreshkactl
+  rm -f /etc/systemd/system/matreshka.service /etc/systemd/system/matreshka-agent.service
+  rm -f /etc/systemd/system/xray.service /etc/systemd/system/hysteria-server.service
+  rm -rf /opt/matreshka /etc/matreshka /var/lib/matreshka "$acme_webroot"
+  if test "$ufw_was_active" -eq 0; then
+    ufw --force disable >/dev/null 2>&1 || true
+  fi
+  systemctl daemon-reload >/dev/null 2>&1 || true
+}
+
+finish() {
+  status=$?
+  set +e
+  if test "$rollback_armed" -eq 1; then
+    rollback_install
+  fi
+  if test -n "$release_tmp"; then
+    rm -rf "$release_tmp"
+  fi
+  trap - EXIT
+  exit "$status"
+}
+
+trap finish EXIT
 
 test "$(id -u)" -eq 0 || { echo "Run as root" >&2; exit 1; }
 test -f "$release_archive" || { echo "Release archive not found" >&2; exit 1; }
@@ -24,6 +66,14 @@ fi
 
 public_ip=$(curl -4fsS --max-time 10 https://api.ipify.org)
 [[ "$public_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo "Could not detect the public IPv4" >&2; exit 1; }
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -Fx "Status: active" >/dev/null; then
+  ufw_was_active=1
+fi
+if test -e /opt/matreshka/current || test -e /etc/matreshka/matreshka.env; then
+  echo "An existing Matreshka installation was found" >&2
+  exit 1
+fi
+rollback_armed=1
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -43,7 +93,6 @@ dpkg --compare-versions "$certbot_version" ge 5.4 || { echo "Certbot 5.4 or newe
 minisign -Vm "$release_archive" -x "$release_signature" -P "$release_public_key"
 
 release_tmp=$(mktemp -d)
-trap 'rm -rf "$release_tmp"' EXIT
 tar -xzf "$release_archive" -C "$release_tmp"
 release_dir=$(find "$release_tmp" -mindepth 1 -maxdepth 1 -type d -name 'matreshka-*' -print -quit)
 if test -z "$release_dir" || ! test -f "$release_dir/manifest.json"; then
@@ -60,7 +109,7 @@ fi
 id matreshka >/dev/null 2>&1 || useradd --system --home /var/lib/matreshka --shell /usr/sbin/nologin matreshka
 install -d -o root -g root -m 0755 /opt/matreshka/releases /opt/matreshka/engines
 install -d -o matreshka -g matreshka -m 0700 /var/lib/matreshka /var/lib/matreshka/incoming /var/lib/matreshka/runtime
-install -d -o root -g root -m 0755 /var/lib/matreshka/acme
+install -d -o root -g root -m 0755 "$acme_webroot"
 install -d -o root -g matreshka -m 0750 /etc/matreshka /etc/matreshka/engines
 
 test ! -e "/opt/matreshka/releases/$version" || { echo "Release $version already exists" >&2; exit 1; }
@@ -101,7 +150,13 @@ install -m 0644 /opt/matreshka/current/infra/nginx/matreshka-setup-http.conf.tem
 ln -sfn /etc/nginx/sites-available/matreshka /etc/nginx/sites-enabled/matreshka
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
+systemctl enable --now nginx
 systemctl reload nginx
+
+install -d -o root -g root -m 0755 "$acme_webroot/.well-known/acme-challenge"
+printf 'matreshka-acme-ok\n' >"$acme_webroot/.well-known/acme-challenge/matreshka-probe"
+test "$(curl -fsS -H "Host: $public_ip" http://127.0.0.1/.well-known/acme-challenge/matreshka-probe)" = "matreshka-acme-ok"
+rm -f "$acme_webroot/.well-known/acme-challenge/matreshka-probe"
 
 "$certbot" certonly \
   --non-interactive \
@@ -109,7 +164,7 @@ systemctl reload nginx
   --register-unsafely-without-email \
   --preferred-profile shortlived \
   --webroot \
-  --webroot-path /var/lib/matreshka/acme \
+  --webroot-path "$acme_webroot" \
   --cert-name "$public_ip" \
   --ip-address "$public_ip"
 
@@ -137,6 +192,7 @@ done
 curl -fsS http://127.0.0.1:8181/readyz >/dev/null
 setup_url=$(journalctl -u matreshka -n 80 --no-pager -o cat | sed -n 's/^Одноразовая ссылка (действует 1 час): //p' | tail -1)
 test -n "$setup_url" || { echo "Matreshka started, but the setup URL was not found in the service log" >&2; exit 1; }
+rollback_armed=0
 
 echo
 echo "Matreshka $version установлена."
