@@ -1,79 +1,121 @@
-# Matreshka — панель
+# Matreshka
 
-Self-hosted-панель для одного владельца, его близких и устройств. Matreshka разворачивает и поддерживает Hysteria 2 и VLESS + XHTTP на одном домене, выдаёт подписки для INCY и Everywhere/Mihomo, публикует общие правила маршрутизации и считает трафик по людям и устройствам без истории посещённых доменов.
+Matreshka is a self-hosted proxy management panel for one owner, trusted people,
+and their devices. It deploys and maintains two proxy stacks on a single domain,
+provides client subscriptions for INCY and Everywhere/Mihomo, publishes shared
+routing rules, and tracks traffic by person and device without storing browsing
+history.
 
-> Статус: `0.1.0-rc.4`, pre-release. Локальные тесты и production-сборки проходят; первая полевая установка проходит VPS gate из [STATUS.md](STATUS.md).
+> **Status:** `0.1.0-rc.5` pre-release. Local tests and production builds pass;
+> the first real-world installation is progressing through the VPS gate described
+> in [STATUS.md](STATUS.md).
 
-## Архитектура
+## Supported protocols
+
+Matreshka currently supports two proxy stacks:
+
+- **VLESS over XHTTP and TLS**, powered by Xray-core, on `TCP/443`.
+- **Hysteria 2** on `UDP/443`.
+
+No other protocols are supported yet.
+
+## Architecture
 
 ```text
 UDP/443 → Hysteria 2
-TCP/443 → Nginx → секретный XHTTP path → Xray на localhost
-                 → admin/API/subscriptions → Matreshka на localhost
-                 → остальные запросы → нейтральная страница
+TCP/443 → Nginx → secret XHTTP path → Xray on localhost
+                 → admin/API/subscriptions → Matreshka on localhost
+                 → all other requests → neutral fallback page
 ```
 
-- интерфейс — Imba, собранный `bimba`;
-- control plane — Bun + TypeScript + SQLite;
-- привилегированные операции — минимальный Go-agent с allowlist;
-- CLI/MCP — `matreshkactl`;
-- Nginx, Hysteria 2 и Xray — отдельные systemd-службы;
-- изменяемые настройки и ревизии живут в SQLite, независимо от release-каталогов.
-- активация и отзыв устройств синхронизируются с Xray через персистентный SQLite-outbox;
-- release archive подписывается Minisign, а installer/updater проверяют подпись до распаковки.
+- The web interface is written in Imba and built with `bimba`.
+- The control plane uses Bun, TypeScript, and SQLite.
+- Privileged operations are handled by a minimal allowlisted Go agent.
+- `matreshkactl` provides a CLI and a local MCP server.
+- Nginx, Hysteria 2, and Xray run as separate systemd services.
+- Mutable settings and revisions live in SQLite, independently of release
+  directories.
+- Device activation and revocation are synchronized with Xray through a
+  persistent SQLite outbox.
+- Release archives are signed with Minisign, and signatures are verified before
+  installation or updates.
 
-Подробности: [архитектура](docs/ARCHITECTURE.md), [разработка](docs/DEVELOPMENT.md), [развёртывание](docs/DEPLOYMENT.md), [безопасность](docs/SECURITY.md).
+For more details, see the documentation for
+[architecture](docs/ARCHITECTURE.md),
+[development](docs/DEVELOPMENT.md),
+[deployment](docs/DEPLOYMENT.md), and
+[security](docs/SECURITY.md).
 
-## Структура репозитория
+## Installation and running
 
-- `src/web/` — Imba-интерфейс панели.
-- `src/server/` — Bun/TypeScript API, SQLite, авторизация и сервисы.
-- `src/cli/` — CLI и локальный MCP-сервер.
-- `agent/` — минимальный привилегированный Go-agent.
-- `infra/` — Nginx, systemd и скрипты установки/обновления.
-- `assets/` и `public/` — исходные и собранные web-ресурсы.
-- `tests/` — unit и integration тесты control plane.
-- `docs/` — архитектура, разработка, deployment и security model.
+### Install on a server
 
-## Локальная разработка
+You need a clean Ubuntu 24.04 amd64 server with a public IPv4 address and
+available ports `TCP/80`, `TCP/443`, and `UDP/443`.
 
-Нужны Bun 1.3.13 и Go 1.24+.
-
-```bash
-bun install --frozen-lockfile
-bun run check
-bun run dev
-```
-
-Панель с демонстрационными данными откроется на `http://localhost:8181/admin/`, а интерактивный pre-launch preview — на `http://localhost:8181/admin/setup?bootstrap=preview`.
-
-## Установка на сервер
-
-Нужна чистая Ubuntu 24.04 amd64 с публичным IPv4 и свободными портами TCP 80/443 и UDP 443. В web-консоли VPS выполните одну команду:
+Run the following command in your VPS web console:
 
 ```bash
 curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo bash /tmp/matreshka-install
 ```
 
-Installer скачивает последний GitHub Release, проверяет detached Minisign signature, ставит только необходимые пакеты и получает короткоживущий доверенный сертификат Let's Encrypt для IP. Полное обновление Ubuntu и перезагрузка не выполняются. В конце команда печатает одноразовую HTTPS-ссылку.
+The installer downloads the latest GitHub Release, verifies its detached
+Minisign signature, installs only the required packages, starts Matreshka, and
+obtains a short-lived trusted Let's Encrypt certificate for the server's IP
+address. It does not perform a full Ubuntu upgrade or reboot the server.
 
-Дальше в браузере можно выбрать бесплатный hostname или собственный домен. Matreshka показывает нужную A-запись, ждёт DNS, выпускает обычный сертификат домена и только после перехода на конечный адрес предлагает создать владельца и passkey.
+When the installation finishes, it prints a one-time HTTPS setup URL. Open the
+URL in a browser, choose a free hostname or your own domain, and follow the setup
+flow. Matreshka shows the required DNS `A` record, waits for DNS propagation,
+issues the final domain certificate, and then lets you create the owner account
+and passkey.
 
-Для установки конкретного RC вместо последнего стабильного release:
+To install a specific release candidate instead of the latest stable release:
 
 ```bash
-curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo env MATRESHKA_VERSION=0.1.0-rc.4 bash /tmp/matreshka-install
+curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo env MATRESHKA_VERSION=0.1.0-rc.5 bash /tmp/matreshka-install
 ```
 
-Подробности, developer deploy и восстановление описаны в [документации по развёртыванию](docs/DEPLOYMENT.md).
+See the [deployment guide](docs/DEPLOYMENT.md) for developer deployment,
+updates, and recovery procedures.
 
-## Лицензия
+### Run locally
 
-Matreshka распространяется по [GNU AGPL-3.0-only](LICENSE). Сведения о зависимостях — в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Local development requires Bun `1.3.13` and Go `1.24` or newer.
 
-## Именование
+```bash
+git clone https://github.com/matreshka-proxy/matreshka-panel.git
+cd matreshka-panel
+bun install --frozen-lockfile
+bun run check
+bun run dev
+```
 
-Публичное имя во всех языках интерфейса и документации пишется как `Matreshka`;
-package name и GitHub-репозиторий используют `matreshka-panel`. Службы, CLI,
-каталоги данных и environment variables используют `matreshka*` и
-`MATRESHKA_*`; legacy-алиасов нет.
+The panel starts with demo data at <http://localhost:8181/admin/>. The interactive
+pre-launch preview is available at
+<http://localhost:8181/admin/setup?bootstrap=preview>.
+
+## Repository structure
+
+- `src/web/` — Imba web interface.
+- `src/server/` — Bun/TypeScript API, SQLite storage, authentication, and
+  services.
+- `src/cli/` — CLI and local MCP server.
+- `agent/` — minimal privileged Go agent.
+- `infra/` — Nginx and systemd configuration, installation, and update scripts.
+- `assets/` and `public/` — source and compiled web assets.
+- `tests/` — control-plane unit and integration tests.
+- `docs/` — architecture, development, deployment, and security documentation.
+
+## License
+
+Matreshka is licensed under the [GNU AGPL-3.0-only](LICENSE). See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party dependency
+notices.
+
+## Naming
+
+The public project name is always written as `Matreshka`. The package and GitHub
+repository use `matreshka-panel`. Services, CLI tools, data directories, and
+environment variables use the `matreshka*` and `MATRESHKA_*` prefixes. There are
+no legacy aliases.
