@@ -73,6 +73,13 @@ describe("release trust chain", () => {
     expect(extract).toBeGreaterThan(verify);
   });
 
+  test("updates and rolls back the installed application version metadata", async () => {
+    const updater = await Bun.file(resolve(root, "infra/scripts/apply-update")).text();
+    expect(updater).toContain('sed "s/^MATRESHKA_VERSION=.*/MATRESHKA_VERSION=$version/"');
+    expect(updater).toContain('install -o root -g matreshka -m 0640 "$update_tmp/matreshka.env.next" "$env_file"');
+    expect(updater).toContain('install -o root -g matreshka -m 0640 "$env_previous" "$env_file"');
+  });
+
   test("includes the release manifest in the signed checksum set", async () => {
     const script = await Bun.file(resolve(root, "scripts/release.ts")).text();
     const manifest = script.indexOf('writeFileSync(join(stage, "manifest.json")');

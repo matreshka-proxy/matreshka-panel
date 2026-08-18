@@ -16,14 +16,20 @@ minisign -Vm "$archive" -x "$signature" -p /opt/matreshka/current/infra/release/
 update_tmp=$(mktemp -d /var/lib/matreshka/update.XXXXXX)
 snapshot="/var/lib/matreshka/update-snapshots/$(date -u +%Y%m%dT%H%M%SZ).sqlite"
 previous=$(readlink -f /opt/matreshka/current)
+env_file=/etc/matreshka/matreshka.env
+env_previous="$update_tmp/matreshka.env.previous"
 next=""
 trap 'rm -rf "$update_tmp"' EXIT
+test -f "$env_file" || { echo "Matreshka environment not found" >&2; exit 1; }
+cp "$env_file" "$env_previous"
 
 tar -xzf "$archive" -C "$update_tmp"
 source_dir=$(find "$update_tmp" -mindepth 1 -maxdepth 1 -type d | head -1)
 version=$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$source_dir/manifest.json")
-test -n "$version" || { echo "Invalid release manifest" >&2; exit 1; }
+[[ "$version" =~ ^[0-9][0-9A-Za-z.-]{0,39}$ ]] || { echo "Invalid release manifest" >&2; exit 1; }
 (cd "$source_dir" && sha256sum -c SHA256SUMS)
+sed "s/^MATRESHKA_VERSION=.*/MATRESHKA_VERSION=$version/" "$env_file" >"$update_tmp/matreshka.env.next"
+grep -qxF "MATRESHKA_VERSION=$version" "$update_tmp/matreshka.env.next"
 
 next="/opt/matreshka/releases/$version"
 test ! -e "$next" || { echo "Release $version is already installed" >&2; exit 1; }
@@ -37,6 +43,7 @@ sqlite3 /var/lib/matreshka/matreshka.sqlite ".backup '$snapshot'"
 rollback() {
   ln -sfn "$previous" /opt/matreshka/current
   install -o matreshka -g matreshka -m 0600 "$snapshot" /var/lib/matreshka/matreshka.sqlite
+  install -o root -g matreshka -m 0640 "$env_previous" "$env_file"
   systemctl daemon-reload
   systemctl restart matreshka
   echo "Update failed and was rolled back to $previous" >&2
@@ -45,6 +52,7 @@ trap 'rollback' ERR
 
 MATRESHKA_DATABASE=/var/lib/matreshka/matreshka.sqlite "$next/bin/matreshkactl" migrate
 ln -sfn "$next" /opt/matreshka/current
+install -o root -g matreshka -m 0640 "$update_tmp/matreshka.env.next" "$env_file"
 install -m 0644 "$next"/infra/systemd/*.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl start matreshka
