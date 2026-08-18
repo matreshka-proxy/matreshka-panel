@@ -28,7 +28,7 @@ curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-p
 Для field test конкретного pre-release:
 
 ```bash
-sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
+curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
 ```
 
 Bootstrap устанавливает `curl`, CA certificates и Minisign, определяет release, скачивает archive и signature с GitHub и проверяет встроенным public key до запуска release installer. Release installer повторно проверяет подпись, затем ставит Nginx, UFW, SQLite/age, pinned tunnel engines и актуальный Certbot из официального snap. Ubuntu 24.04 содержит Certbot 2.9, а IP certificates требуют Certbot 5.4+; поэтому apt-версия Certbot не используется.

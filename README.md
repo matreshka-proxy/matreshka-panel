@@ -62,7 +62,7 @@ Installer скачивает последний GitHub Release, проверяе
 Для установки конкретного RC вместо последнего стабильного release:
 
 ```bash
-sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
+curl -fsSLo /tmp/matreshka-install https://raw.githubusercontent.com/matreshka-proxy/matreshka-panel/main/infra/scripts/bootstrap && sudo env MATRESHKA_VERSION=0.1.0-rc.1 bash /tmp/matreshka-install
 ```
 
 Подробности, developer deploy и восстановление описаны в [документации по развёртыванию](docs/DEPLOYMENT.md).

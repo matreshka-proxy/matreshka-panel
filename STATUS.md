@@ -50,6 +50,10 @@
 - подписанный локальный `matreshka-0.1.0-rc.1-linux-amd64.tar.gz`: Minisign verify, все внутренние SHA-256 и отрицательный tamper test проходят;
 - Minisign private key находится вне репозитория с mode `0600` и загружен в GitHub environment `release`; public key закоммичен.
 - Gitleaks 8.30.1 просканировал исходное дерево: реальных секретов не найдено; pinned public Xray SHA-256 документирован в точечном allowlist.
+- GitHub-репозиторий публичен, `main` защищена обязательными CI-проверками и squash PR; включены secret scanning, push protection и Dependabot security updates;
+- signed workflow успешно опубликовал pre-release [`v0.1.0-rc.1`](https://github.com/matreshka-proxy/matreshka-panel/releases/tag/v0.1.0-rc.1);
+- публичный archive повторно скачан анонимно: внешний SHA-256 `30950dc3f5e07ff9288a250f19fb2d8703985f52620170895814cae47e716846`, detached Minisign signature и внутренний `SHA256SUMS` подтверждены;
+- Gitleaks повторно проверил текущее дерево и всю Git-историю перед публикацией: секретов и legacy-названия нет; `bun audit` не нашёл уязвимостей.
 
 ## Gate перед первой реальной установкой
 
@@ -66,6 +70,5 @@
 9. намеренно сломанный update и автоматический rollback;
 10. age export/restore на второй чистой VM с тем же доменом;
 11. WebAuthn e2e с virtual authenticator на final domain;
-12. первый ручной прогон workflow `Signed release` на `v0.1.0-rc.1` и сверка опубликованных assets.
 
 До прохождения gate проект следует считать pre-release, а не production-ready.
