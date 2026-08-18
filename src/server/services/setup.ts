@@ -46,10 +46,15 @@ export class SetupService {
       throw new ServiceError(409, `Домен пока не указывает на этот сервер (${this.settings.publicIp})`);
     }
 
-    await this.runner({
-      action: "setup.finalize",
-      payload: { domain: body.domain, publicIp: this.settings.publicIp },
-    });
+    try {
+      await this.runner({
+        action: "setup.finalize",
+        payload: { domain: body.domain, publicIp: this.settings.publicIp },
+      });
+    } catch (error) {
+      console.error(`[SETUP] Не удалось применить домен ${body.domain}:`, error);
+      throw new ServiceError(502, "DNS-запись подтверждена, но сервер не смог завершить настройку домена — попробуйте ещё раз");
+    }
     return {
       domain: body.domain,
       origin: `https://${body.domain}`,

@@ -323,21 +323,27 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export async function callAgent(request: { action: string; payload: Record<string, unknown> }) {
+export async function callAgent(request: { action: string; payload: Record<string, unknown> }, socketPath = config.agentSocket) {
   return new Promise<Record<string, unknown>>((resolve, reject) => {
-    const socket = createConnection(config.agentSocket);
+    const socket = createConnection(socketPath);
     let response = "";
     const timeout = request.action === "setup.finalize" ? 180_000 : request.action === "engine.update" ? 120_000 : 30_000;
     socket.setTimeout(timeout);
-    socket.on("connect", () => socket.end(`${JSON.stringify(request)}\n`));
+    // Bun closes the readable side after net.Socket.end(), so a delayed agent
+    // reply is lost. The newline terminates the request without half-closing it.
+    socket.on("connect", () => socket.write(`${JSON.stringify(request)}\n`));
     socket.on("data", (chunk) => { response += chunk.toString("utf8"); });
     socket.on("end", () => {
+      if (!response.trim()) {
+        reject(new Error("root-agent закрыл соединение без ответа"));
+        return;
+      }
       try {
         const parsed = JSON.parse(response) as { ok: boolean; error?: string } & Record<string, unknown>;
         if (!parsed.ok) reject(new Error(parsed.error ?? "root-agent отклонил операцию"));
         else resolve(parsed);
-      } catch (error) {
-        reject(error);
+      } catch {
+        reject(new Error("root-agent вернул некорректный ответ"));
       }
     });
     socket.on("timeout", () => socket.destroy(new Error(`root-agent не ответил за ${timeout / 1000} секунд`)));

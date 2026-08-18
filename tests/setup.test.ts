@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { AuthService } from "../src/server/auth/webauthn";
 import { SetupService } from "../src/server/services/setup";
 import { database } from "./helpers";
@@ -45,6 +45,21 @@ describe("initial domain setup", () => {
     );
     await expect(setup.finalize({ bootstrapToken: token, domain: "proxy.example.com" })).rejects.toThrow("не указывает");
     expect(invoked).toBeFalse();
+  });
+
+  test("returns an actionable setup error when root-agent fails", async () => {
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    const setup = new SetupService(
+      auth,
+      { setup: true, publicIp: "203.0.113.42", adminPath: "/admin" },
+      async () => ["203.0.113.42"],
+      async () => { throw new Error("socket closed"); },
+    );
+    const result = setup.finalize({ bootstrapToken: token, domain: "proxy.example.com" });
+    await expect(result).rejects.toMatchObject({ status: 502 });
+    await expect(result).rejects.toThrow("DNS-запись подтверждена");
+    expect(log).toHaveBeenCalledTimes(1);
+    log.mockRestore();
   });
 
   test("rejects setup after the server has switched to its final mode", () => {
