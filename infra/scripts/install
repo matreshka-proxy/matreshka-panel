@@ -12,7 +12,10 @@ test -f "$release_signature" || { echo "Release signature not found" >&2; exit 1
 test "$(dpkg --print-architecture)" = "amd64" || { echo "Ubuntu amd64 is required" >&2; exit 1; }
 # shellcheck source=/dev/null
 . /etc/os-release
-test "$ID" = "ubuntu" && test "$VERSION_ID" = "24.04" || { echo "Ubuntu 24.04 is required" >&2; exit 1; }
+if test "$ID" != "ubuntu" || test "$VERSION_ID" != "24.04"; then
+  echo "Ubuntu 24.04 is required" >&2
+  exit 1
+fi
 
 if ss -Hlnptu | awk '{print $5}' | grep -Eq ':(80|443)$'; then
   echo "Ports 80 or 443 are already occupied; a clean Ubuntu install is required" >&2
@@ -43,9 +46,15 @@ release_tmp=$(mktemp -d)
 trap 'rm -rf "$release_tmp"' EXIT
 tar -xzf "$release_archive" -C "$release_tmp"
 release_dir=$(find "$release_tmp" -mindepth 1 -maxdepth 1 -type d -name 'matreshka-*' -print -quit)
-test -n "$release_dir" && test -f "$release_dir/manifest.json" || { echo "Invalid release archive" >&2; exit 1; }
+if test -z "$release_dir" || ! test -f "$release_dir/manifest.json"; then
+  echo "Invalid release archive" >&2
+  exit 1
+fi
 version=$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$release_dir/manifest.json")
-test -n "$version" && test "$(basename "$release_dir")" = "matreshka-$version" || { echo "Invalid release manifest" >&2; exit 1; }
+if test -z "$version" || test "$(basename "$release_dir")" != "matreshka-$version"; then
+  echo "Invalid release manifest" >&2
+  exit 1
+fi
 (cd "$release_dir" && sha256sum -c SHA256SUMS)
 
 id matreshka >/dev/null 2>&1 || useradd --system --home /var/lib/matreshka --shell /usr/sbin/nologin matreshka

@@ -46,7 +46,9 @@ rollback() {
   install -o root -g matreshka -m 0640 "$stage/env.previous" "$env_file"
   install -o root -g matreshka -m 0640 "$stage/hysteria.previous" /etc/matreshka/engines/hysteria.yaml
   install -o root -g matreshka -m 0640 "$stage/xray.previous" /etc/matreshka/engines/xray.json
-  nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
+  if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx || true
+  fi
 }
 finish() {
   status=$?

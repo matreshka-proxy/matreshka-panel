@@ -8,7 +8,10 @@ test "$(id -u)" -eq 0 || { echo "Run with sudo" >&2; exit 1; }
 test "$(dpkg --print-architecture)" = "amd64" || { echo "Ubuntu amd64 is required" >&2; exit 1; }
 # shellcheck source=/dev/null
 . /etc/os-release
-test "$ID" = "ubuntu" && test "$VERSION_ID" = "24.04" || { echo "Ubuntu 24.04 is required" >&2; exit 1; }
+if test "$ID" != "ubuntu" || test "$VERSION_ID" != "24.04"; then
+  echo "Ubuntu 24.04 is required" >&2
+  exit 1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
